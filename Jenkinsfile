@@ -15,6 +15,10 @@ pipeline {
     }
 
     parameters {
+        string(name: 'GIT_REPO_URL', defaultValue: 'https://github.com/Ganapathi-varma/Npci-Ecommerce-Application-Test.git',
+               description: 'Only used when the job is a plain "Pipeline script" (no SCM); ignored for Pipeline from SCM / Multibranch')
+        string(name: 'GIT_BRANCH_NAME', defaultValue: 'main',
+               description: 'Branch to build when the job has no SCM configured')
         string(name: 'SCAN_SEVERITY', defaultValue: 'HIGH,CRITICAL',
                description: 'Trivy severities that fail the build')
         booleanParam(name: 'FAIL_ON_VULN', defaultValue: true,
@@ -34,8 +38,18 @@ pipeline {
 
         stage('Checkout') {
             steps {
-                checkout scm
                 script {
+                    // Works for "Pipeline script from SCM" / Multibranch; falls back to an explicit
+                    // checkout when the Jenkinsfile was pasted into a plain "Pipeline script" job.
+                    try {
+                        checkout scm
+                    } catch (Exception e) {
+                        echo "No job SCM available (${e.message}); checking out ${params.GIT_REPO_URL}@${params.GIT_BRANCH_NAME}"
+                        checkout([$class: 'GitSCM',
+                                  branches: [[name: "*/${params.GIT_BRANCH_NAME}"]],
+                                  userRemoteConfigs: [[url: params.GIT_REPO_URL]]])
+                    }
+                    env.GIT_COMMIT = sh(script: 'git rev-parse HEAD', returnStdout: true).trim()
                     env.GIT_SHORT = sh(script: 'git rev-parse --short HEAD', returnStdout: true).trim()
                     env.IMAGE_TAG = "${env.BUILD_NUMBER}-${env.GIT_SHORT}"
                     env.IMAGE     = "${env.APP_NAME}:${env.IMAGE_TAG}"
