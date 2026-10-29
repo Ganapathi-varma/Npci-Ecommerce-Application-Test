@@ -1,4 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { RouterTestingModule } from '@angular/router/testing';
 
 import { CheckoutComponent } from './checkout.component';
 
@@ -8,7 +12,9 @@ describe('CheckoutComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [CheckoutComponent]
+      imports: [HttpClientTestingModule, RouterTestingModule, ReactiveFormsModule, FormsModule],
+      declarations: [CheckoutComponent],
+      schemas: [NO_ERRORS_SCHEMA]
     })
     .compileComponents();
     

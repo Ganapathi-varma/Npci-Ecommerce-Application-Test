@@ -1,4 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { RouterTestingModule } from '@angular/router/testing';
 
 import { CustomerSignupComponent } from './customer-signup.component';
 
@@ -8,7 +12,9 @@ describe('CustomerSignupComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [CustomerSignupComponent]
+      imports: [HttpClientTestingModule, RouterTestingModule, ReactiveFormsModule, FormsModule],
+      declarations: [CustomerSignupComponent],
+      schemas: [NO_ERRORS_SCHEMA]
     })
     .compileComponents();
     

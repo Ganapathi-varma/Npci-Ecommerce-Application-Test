@@ -1,4 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { NO_ERRORS_SCHEMA } from '@angular/core';
+import { FormsModule, ReactiveFormsModule } from '@angular/forms';
+import { HttpClientTestingModule } from '@angular/common/http/testing';
+import { RouterTestingModule } from '@angular/router/testing';
 
 import { SearchComponent } from './search.component';
 
@@ -8,7 +12,9 @@ describe('SearchComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      declarations: [SearchComponent]
+      imports: [HttpClientTestingModule, RouterTestingModule, ReactiveFormsModule, FormsModule],
+      declarations: [SearchComponent],
+      schemas: [NO_ERRORS_SCHEMA]
     })
     .compileComponents();
     
