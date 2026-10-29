@@ -1,15 +1,20 @@
-import { EventEmitter, Injectable } from '@angular/core';
+import { EventEmitter, Injectable, inject } from '@angular/core';
 import { Cart, Order, Product } from '../models/dataTypes';
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
 import { catchError, throwError } from 'rxjs';
+
+import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ShopService {
 
-  public replaceUrl = 'http://localhost:5000/'
-  public url = 'https://e-commerce-backend-f8v8.onrender.com/'
+  private config = inject(ConfigService)
+
+  get url(){
+    return this.config.apiUrl
+  }
 
   public cartDataLength = new EventEmitter<Product[] | []>()
 

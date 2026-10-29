@@ -1,0 +1,52 @@
+# Path-based routing, derived from the Angular route table (src/app/*/**-routing.module.ts):
+#
+#   /api/**          -> ecommerce-backend  (REST: auth, users, products, carts, orders; /api prefix is stripped)
+#   /products/**     -> ecommerce-seller   (seller console: /products, /products/upload, /products/update/:id)
+#   /seller-signup   -> ecommerce-seller
+#   /**              -> ecommerce-customer (shop, product-details/:id, search/:q, cart, checkout, orders, customer-signup)
+#
+# Needs an ingress-nginx controller:  minikube addons enable ingress
+# No host is set, so it answers on the Minikube IP:  http://$(minikube ip)/
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-web
+  namespace: npci-ecommerce
+  labels: { app.kubernetes.io/part-of: npci-ecommerce }
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /products
+            pathType: Prefix
+            backend: { service: { name: ecommerce-seller, port: { name: http } } }
+          - path: /seller-signup
+            pathType: Prefix
+            backend: { service: { name: ecommerce-seller, port: { name: http } } }
+          - path: /
+            pathType: Prefix
+            backend: { service: { name: ecommerce-customer, port: { name: http } } }
+---
+# Separate Ingress because the rewrite / upstream annotations must apply to /api only.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: ecommerce-api
+  namespace: npci-ecommerce
+  labels: { app.kubernetes.io/part-of: npci-ecommerce }
+  annotations:
+    nginx.ingress.kubernetes.io/use-regex: "true"
+    nginx.ingress.kubernetes.io/rewrite-target: /$2
+    nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
+    nginx.ingress.kubernetes.io/upstream-vhost: e-commerce-backend-f8v8.onrender.com
+    nginx.ingress.kubernetes.io/proxy-ssl-server-name: "on"
+    nginx.ingress.kubernetes.io/proxy-read-timeout: "60"
+spec:
+  ingressClassName: nginx
+  rules:
+    - http:
+        paths:
+          - path: /api(/|$)(.*)
+            pathType: ImplementationSpecific
+            backend: { service: { name: ecommerce-backend, port: { number: 443 } } }

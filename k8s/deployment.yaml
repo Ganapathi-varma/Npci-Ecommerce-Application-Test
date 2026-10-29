@@ -1,0 +1,131 @@
+# Two Deployments from the SAME image, so the storefront and the seller console can be scaled,
+# restricted and rolled back independently. Ingress (ingress.yaml) sends each URL path to one of them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-customer
+  namespace: npci-ecommerce
+  labels: &customer-labels
+    app.kubernetes.io/name: ecommerce-frontend
+    app.kubernetes.io/component: customer
+    app.kubernetes.io/part-of: npci-ecommerce
+spec:
+  replicas: 2
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ecommerce-frontend
+      app.kubernetes.io/component: customer
+  template:
+    metadata:
+      labels: *customer-labels
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: frontend
+          image: npci-ecommerce-frontend:latest   # replaced with the freshly built tag by deploy.sh
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: app-config, mountPath: /usr/share/nginx/html/assets/config.json, subPath: config.json, readOnly: true }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - name: app-config
+          secret:
+            secretName: ecommerce-frontend-secret   # created by deploy.sh; the pod will not start without it
+            defaultMode: 0444
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: ecommerce-seller
+  namespace: npci-ecommerce
+  labels: &seller-labels
+    app.kubernetes.io/name: ecommerce-frontend
+    app.kubernetes.io/component: seller
+    app.kubernetes.io/part-of: npci-ecommerce
+spec:
+  replicas: 1
+  revisionHistoryLimit: 5
+  strategy:
+    type: RollingUpdate
+    rollingUpdate: { maxSurge: 1, maxUnavailable: 0 }
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: ecommerce-frontend
+      app.kubernetes.io/component: seller
+  template:
+    metadata:
+      labels: *seller-labels
+    spec:
+      automountServiceAccountToken: false
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 101
+        runAsGroup: 101
+        fsGroup: 101
+        seccompProfile: { type: RuntimeDefault }
+      containers:
+        - name: frontend
+          image: npci-ecommerce-frontend:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - { name: http, containerPort: 8080 }
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 3
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+            timeoutSeconds: 2
+            failureThreshold: 3
+          resources:
+            requests: { cpu: 50m, memory: 64Mi }
+            limits: { cpu: 250m, memory: 128Mi }
+          volumeMounts:
+            - { name: tmp, mountPath: /tmp }
+            - { name: app-config, mountPath: /usr/share/nginx/html/assets/config.json, subPath: config.json, readOnly: true }
+      volumes:
+        - { name: tmp, emptyDir: {} }
+        - name: app-config
+          secret:
+            secretName: ecommerce-frontend-secret
+            defaultMode: 0444

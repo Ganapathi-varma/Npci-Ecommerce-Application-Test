@@ -1,4 +1,4 @@
-// Phase 1 - CI pipeline: install -> unit tests -> Docker image build -> vulnerability scan.
+// CI/CD pipeline: install -> unit tests -> Docker image build -> vulnerability scan -> (optional) push to registry -> (optional) deploy to Minikube.
 // Requirements on the Jenkins agent: Node.js >= 18.13, Google Chrome, Docker (the jenkins user
 // must be in the `docker` group). No credentials are needed for these stages.
 
@@ -23,6 +23,20 @@ pipeline {
                description: 'Trivy severities that fail the build')
         booleanParam(name: 'FAIL_ON_VULN', defaultValue: true,
                      description: 'Fail the build when fixable vulnerabilities of the severities above are found')
+        booleanParam(name: 'PUSH_IMAGE', defaultValue: false,
+                     description: 'Push the scanned image to the container registry')
+        string(name: 'REGISTRY_HOST', defaultValue: 'docker.io',
+               description: 'Registry host (docker.io = Docker Hub)')
+        string(name: 'IMAGE_REPO', defaultValue: 'ganapathivarma/npci-ecommerce-frontend',
+               description: 'Docker Hub repository to push to (<user>/<name>)')
+        string(name: 'DOCKER_USERNAME', defaultValue: 'ganapathivarma',
+               description: 'Docker Hub username used for the push (not a secret)')
+        booleanParam(name: 'DEPLOY_TO_MINIKUBE', defaultValue: false,
+                     description: 'Deploy the built image to Minikube (needs minikube + kubectl working for the jenkins user)')
+        string(name: 'MINIKUBE_PROFILE', defaultValue: 'minikube',
+               description: 'Minikube profile / kubectl context to deploy to')
+        string(name: 'API_URL_CREDENTIALS_ID', defaultValue: 'ecommerce-api-url',
+               description: 'Jenkins "Secret text" credential holding the backend URL; deploy.sh stores it in a Kubernetes Secret')
     }
 
     environment {
@@ -128,6 +142,54 @@ pipeline {
                 failure { script { stageResults['Vulnerability Scan'] = 'FAILURE' } }
             }
         }
+
+        stage('Docker Push') {
+            when { expression { params.PUSH_IMAGE } }
+            steps {
+                // Only reached when the scan passed. The Docker Hub access token comes from the Jenkins Secret text credential 'dockerhub-token',
+                // bound for this stage only (masked in the log); the username is the DOCKER_USERNAME parameter.
+                // The login lives in a throw-away Docker config dir.
+                withCredentials([string(credentialsId: 'dockerhub-token', variable: 'REG_PASS')]) {
+                    sh '''
+                        set -eu
+                        LOGIN_SERVER=""; [ "$REGISTRY_HOST" = "docker.io" ] || LOGIN_SERVER="$REGISTRY_HOST"
+                        export DOCKER_CONFIG="$(mktemp -d)"
+                        trap 'docker logout $LOGIN_SERVER >/dev/null 2>&1 || true; rm -rf "$DOCKER_CONFIG"' EXIT
+
+                        REPO="${IMAGE_REPO:-$DOCKER_USERNAME/$APP_NAME}"
+                        if [ -n "$LOGIN_SERVER" ]; then REF="$LOGIN_SERVER/$REPO"; else REF="$REPO"; fi
+
+                        printf '%s' "$REG_PASS" | docker login $LOGIN_SERVER -u "$DOCKER_USERNAME" --password-stdin
+                        docker tag "$IMAGE" "$REF:$IMAGE_TAG"
+                        docker tag "$IMAGE" "$REF:latest"
+                        docker push "$REF:$IMAGE_TAG"
+                        docker push "$REF:latest"
+                        docker image inspect --format '{{index .RepoDigests 0}}' "$REF:$IMAGE_TAG" > pushed-image.txt
+                        echo "Pushed: $(cat pushed-image.txt)"
+                    '''
+                }
+                script { env.PUSHED_IMAGE = readFile('pushed-image.txt').trim() }
+            }
+            post {
+                success { script { stageResults['Docker Push'] = 'SUCCESS' } }
+                failure { script { stageResults['Docker Push'] = 'FAILURE' } }
+            }
+        }
+
+        stage('Deploy to Minikube') {
+            when { expression { params.DEPLOY_TO_MINIKUBE } }
+            steps {
+                // Loads the freshly built image into Minikube, applies k8s/, waits for the rollout and smoke-tests /healthz.
+                // The backend URL comes from a Jenkins credential and ends up only in a Kubernetes Secret.
+                withCredentials([string(credentialsId: params.API_URL_CREDENTIALS_ID, variable: 'API_URL')]) {
+                    sh 'MINIKUBE_PROFILE="$MINIKUBE_PROFILE" sh k8s/deploy.sh "$IMAGE"'
+                }
+            }
+            post {
+                success { script { stageResults['Deploy to Minikube'] = 'SUCCESS' } }
+                failure { script { stageResults['Deploy to Minikube'] = 'FAILURE' } }
+            }
+        }
     }
 
     post {
@@ -141,6 +203,7 @@ pipeline {
   "result": "${currentBuild.currentResult}",
   "commit": "${env.GIT_SHORT ?: 'unknown'}",
   "image": "${env.IMAGE ?: ''}",
+  "pushed_image": "${env.PUSHED_IMAGE ?: ''}",
   "duration_ms": ${currentBuild.duration},
   "build_url": "${env.BUILD_URL}",
   "stages": { ${stagesJson} }
@@ -149,7 +212,7 @@ pipeline {
             }
             archiveArtifacts artifacts: 'ci-status.json', allowEmptyArchive: true
         }
-        success { echo "CI passed. Image ${env.IMAGE} is ready for the deploy phase." }
+        success { echo "Pipeline passed. Image ${env.IMAGE} built and scanned${env.PUSHED_IMAGE ? ', pushed as ' + env.PUSHED_IMAGE : ''}." }
         failure { echo 'CI failed. See the failing stage log and ci-status.json.' }
     }
 }

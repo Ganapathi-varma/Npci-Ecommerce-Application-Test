@@ -1,15 +1,20 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { catchError, throwError } from 'rxjs';
 import { Product } from '../models/dataTypes';
+
+import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ProductsService {
 
-  public replaceUrl = 'http://localhost:5000/'
-  public url = 'https://e-commerce-backend-f8v8.onrender.com/'
+  private config = inject(ConfigService)
+
+  get url(){
+    return this.config.apiUrl
+  }
 
   constructor(private http: HttpClient) { }
 

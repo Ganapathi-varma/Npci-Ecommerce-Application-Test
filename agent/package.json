@@ -1,0 +1,16 @@
+{
+  "name": "ecommerce-incident-agent",
+  "version": "1.0.0",
+  "description": "Evidence-based incident diagnosis for the e-commerce deployment. Read-only by default; every change needs explicit human approval.",
+  "private": true,
+  "type": "module",
+  "bin": { "ai-agent": "./bin/ai-agent.js" },
+  "engines": { "node": ">=18.13" },
+  "scripts": {
+    "test": "node --test test/",
+    "diagnose": "node bin/ai-agent.js diagnose"
+  },
+  "dependencies": {
+    "@anthropic-ai/sdk": "^1.3.0"
+  }
+}

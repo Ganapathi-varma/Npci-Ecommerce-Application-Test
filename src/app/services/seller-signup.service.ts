@@ -1,16 +1,21 @@
 import { HttpClient, HttpErrorResponse, HttpHeaders } from '@angular/common/http';
-import { EventEmitter, Injectable } from '@angular/core';
+import { EventEmitter, Injectable, inject } from '@angular/core';
 import { BehaviorSubject, catchError, throwError } from 'rxjs';
 import { Signup } from '../models/dataTypes';
 import { Router } from '@angular/router';
+
+import { ConfigService } from './config.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SellerSignupService {
 
-  public replaceUrl = 'http://localhost:5000/'
-  public url = 'https://e-commerce-backend-f8v8.onrender.com/'
+  private config = inject(ConfigService)
+
+  get url(){
+    return this.config.apiUrl
+  }
   public signupMsg = new EventEmitter<boolean>(false)
   public isSellerLoggedIn = new BehaviorSubject<boolean>(false)
 

@@ -1,4 +1,4 @@
-import { NgModule } from '@angular/core';
+import { APP_INITIALIZER, NgModule } from '@angular/core';
 import { BrowserModule } from '@angular/platform-browser';
 
 import { AppRoutingModule } from './app-routing.module';
@@ -9,6 +9,7 @@ import { SellerModule } from './seller/seller.module';
 import { SignupModule } from './signup/signup.module';
 import { HttpClientModule } from '@angular/common/http';
 import { NotFoundComponent } from './not-found/not-found.component';
+import { ConfigService } from './services/config.service';
 
 @NgModule({
   declarations: [
@@ -24,7 +25,14 @@ import { NotFoundComponent } from './not-found/not-found.component';
     SignupModule,
     HttpClientModule
   ],
-  providers: [],
+  providers: [
+    {
+      provide: APP_INITIALIZER,
+      useFactory: (config: ConfigService) => () => config.load(),
+      deps: [ConfigService],
+      multi: true
+    }
+  ],
   bootstrap: [AppComponent]
 })
 export class AppModule { }

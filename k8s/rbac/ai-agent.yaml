@@ -1,0 +1,77 @@
+# ROLE 2 - the AI incident agent's ServiceAccount: read + limited write, in the app namespace only.
+#
+# "Ask before proceeding" is enforced by the agent (agent/src/approval.js): every write below is only run after you
+# type APPROVE <action-id>. RBAC adds a second wall: even an approved action can touch nothing outside this list.
+#
+# Deliberately NOT granted: Secrets (the backend URL stays unreadable), create/delete of Deployments, RBAC objects,
+# exec into pods, anything in other namespaces.
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: ai-agent
+  namespace: npci-ecommerce
+  labels: { app.kubernetes.io/part-of: npci-ecommerce }
+automountServiceAccountToken: false   # nothing runs as this SA inside the cluster; tokens are minted on demand
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: ai-agent-readwrite
+  namespace: npci-ecommerce
+rules:
+  # --- read (diagnosis) ---
+  - apiGroups: [""]
+    resources: ["pods", "pods/log", "services", "endpoints", "events", "configmaps", "resourcequotas"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["apps"]
+    resources: ["deployments", "replicasets"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch"]
+  # --- write (remediation; each one needs human approval in the agent) ---
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["patch", "update"]           # rollout restart / rollout undo
+  - apiGroups: ["apps"]
+    resources: ["deployments/scale"]
+    verbs: ["get", "patch", "update"]    # scale up / down
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["delete"]                    # recycle a single stuck pod
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: ai-agent-readwrite
+  namespace: npci-ecommerce
+subjects:
+  - { kind: ServiceAccount, name: ai-agent, namespace: npci-ecommerce }
+roleRef:
+  kind: Role
+  name: ai-agent-readwrite
+  apiGroup: rbac.authorization.k8s.io
+---
+# Cluster-wide, read-only, so the agent can tell "namespace missing" from "no access" and see node pressure.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: ai-agent-cluster-read
+rules:
+  - apiGroups: [""]
+    resources: ["nodes", "namespaces"]
+    verbs: ["get", "list"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingressclasses"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: ai-agent-cluster-read
+subjects:
+  - { kind: ServiceAccount, name: ai-agent, namespace: npci-ecommerce }
+roleRef:
+  kind: ClusterRole
+  name: ai-agent-cluster-read
+  apiGroup: rbac.authorization.k8s.io
