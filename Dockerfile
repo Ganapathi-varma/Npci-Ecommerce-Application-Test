@@ -22,8 +22,16 @@ RUN npm run build -- --configuration production
 # ---------- Stage 3: minimal, non-root runtime ----------
 FROM nginxinc/nginx-unprivileged:1.27-alpine AS runtime
 
+# Pull in OS security fixes that are newer than the base image (openssl, curl, expat, libpng, ...).
+# OS_UPDATE_DATE changes daily from CI so a cached layer never hides new fixes.
+ARG OS_UPDATE_DATE=unset
+USER root
+RUN echo "OS packages refreshed: ${OS_UPDATE_DATE}" \
+    && apk upgrade --no-cache
+USER 101
+
 # Only the compiled static files are copied: no Node, npm, source code or .git in the final image.
-COPY --from=build /app/dist/client/browser /usr/share/nginx/html
+COPY --from=build --chown=101:0 /app/dist/client/browser /usr/share/nginx/html
 COPY docker/nginx.conf /etc/nginx/conf.d/default.conf
 COPY --chmod=755 docker/40-config.sh /docker-entrypoint.d/40-config.sh
 

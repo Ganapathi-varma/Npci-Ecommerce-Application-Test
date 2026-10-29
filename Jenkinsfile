@@ -92,7 +92,8 @@ pipeline {
             steps {
                 // The multi-stage Dockerfile compiles the Angular app itself; no secrets are passed in.
                 sh '''
-                    DOCKER_BUILDKIT=1 docker build \
+                    DOCKER_BUILDKIT=1 docker build --pull \
+                        --build-arg OS_UPDATE_DATE="$(date +%F)" \
                         --label org.opencontainers.image.revision="$GIT_COMMIT" \
                         --label ci.build-number="$BUILD_NUMBER" \
                         -t "$IMAGE" -t "$APP_NAME:latest" .
